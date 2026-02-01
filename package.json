@@ -1,0 +1,38 @@
+{
+  "name": "@humanity-protocol/docs-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Humanity Protocol documentation with caching, search, and intelligent fetching",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "humanity-docs-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "prepare": "npm run build",
+    "test": "node test.mjs",
+    "setup": "./setup.sh"
+  },
+  "keywords": [
+    "mcp",
+    "humanity-protocol",
+    "documentation",
+    "claude-code"
+  ],
+  "author": "Humanity Protocol",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "node-fetch": "^3.3.2",
+    "cheerio": "^1.0.0-rc.12",
+    "node-cache": "^5.1.2",
+    "turndown": "^7.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/turndown": "^5.0.4",
+    "typescript": "^5.3.0"
+  }
+}
