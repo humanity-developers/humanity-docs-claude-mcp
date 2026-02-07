@@ -12,9 +12,10 @@ import NodeCache from 'node-cache'
 import TurndownService from 'turndown'
 
 // Configuration
-const DOCS_BASE_URL = 'https://docs.humanity.org/llms.txt'
+const DOCS_BASE_URL = 'https://docs.humanity.org'
+const LLMS_TXT_URL = 'https://docs.humanity.org/llms.txt'
 const CACHE_TTL = 3600 // 1 hour
-const MAX_CONTENT_LENGTH = 50000 // characters
+const MAX_CONTENT_LENGTH = 100000 // characters (increased for llms.txt)
 
 // Initialize cache (1 hour TTL, check every 10 minutes)
 const cache = new NodeCache({ stdTTL: CACHE_TTL, checkperiod: 600 })
@@ -39,8 +40,43 @@ interface CachedDoc {
   markdown: string
 }
 
+interface LlmsTxtContent {
+  raw: string
+  lastFetched: Date
+}
+
+/**
+ * Fetch the llms.txt file - optimized for LLM consumption
+ * This is the primary source for comprehensive documentation
+ */
+async function fetchLlmsTxt(): Promise<string> {
+  const cacheKey = 'llms-txt'
+  const cached = cache.get<LlmsTxtContent>(cacheKey)
+  if (cached) {
+    return cached.raw
+  }
+
+  const response = await fetch(LLMS_TXT_URL)
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch llms.txt: ${response.status} ${response.statusText}`,
+    )
+  }
+
+  const content = await response.text()
+
+  // Cache the result
+  cache.set(cacheKey, {
+    raw: content,
+    lastFetched: new Date(),
+  })
+
+  return content
+}
+
 /**
  * Fetch and parse documentation from docs.humanity.org
+ * Uses llms.txt for root path, individual pages for specific paths
  */
 async function fetchDocumentation(path: string): Promise<CachedDoc> {
   // Check cache first
@@ -48,6 +84,49 @@ async function fetchDocumentation(path: string): Promise<CachedDoc> {
   const cached = cache.get<CachedDoc>(cacheKey)
   if (cached) {
     return cached
+  }
+
+  // Use llms.txt for root path or explicit llms.txt request
+  if (path === '/' || path === '' || path === '/llms.txt' || path === 'llms.txt') {
+    const llmsTxt = await fetchLlmsTxt()
+
+    // Extract first heading as title
+    const titleMatch = llmsTxt.match(/^#\s+(.+)$/m)
+    const title = titleMatch ? titleMatch[1] : 'Humanity Protocol Documentation'
+
+    // Extract code examples
+    const codeExamples: string[] = []
+    const codeBlockRegex = /```[\w]*\n([\s\S]*?)```/g
+    let match
+    while ((match = codeBlockRegex.exec(llmsTxt)) !== null) {
+      const code = match[1].trim()
+      if (code.length > 10 && code.length < 2000) {
+        codeExamples.push(code)
+      }
+    }
+
+    // Truncate if too long
+    let finalContent = llmsTxt
+    if (finalContent.length > MAX_CONTENT_LENGTH) {
+      finalContent =
+        finalContent.substring(0, MAX_CONTENT_LENGTH) +
+        '\n\n[Content truncated...]'
+    }
+
+    const result: CachedDoc = {
+      content: llmsTxt,
+      markdown: finalContent,
+      metadata: {
+        title,
+        description: 'Comprehensive Humanity Protocol documentation (llms.txt)',
+        apiEndpoints: [],
+        codeExamples: codeExamples.slice(0, 10),
+        lastFetched: new Date(),
+      },
+    }
+
+    cache.set(cacheKey, result)
+    return result
   }
 
   const url = path.startsWith('http')
@@ -130,75 +209,87 @@ async function fetchDocumentation(path: string): Promise<CachedDoc> {
 }
 
 /**
- * Search documentation by crawling common paths
+ * Search documentation using llms.txt as the primary source
+ * This provides comprehensive search across all documentation in a single fetch
  */
 async function searchDocumentation(
   query: string,
 ): Promise<Array<{ path: string; title: string; snippet: string }>> {
-  // Common documentation paths to search
-  const commonPaths = [
-    '/',
-    '/api',
-    '/api/authentication',
-    '/api/verification',
-    '/sdk',
-    '/getting-started',
-    '/guides',
-    '/reference',
-    '/integration',
-    '/quickstart',
-  ]
-
   const results: Array<{ path: string; title: string; snippet: string }> = []
   const searchLower = query.toLowerCase()
 
-  for (const path of commonPaths) {
-    try {
-      const doc = await fetchDocumentation(path)
-      const contentLower = doc.markdown.toLowerCase()
+  try {
+    const llmsTxt = await fetchLlmsTxt()
+    const contentLower = llmsTxt.toLowerCase()
 
-      if (
-        contentLower.includes(searchLower) ||
-        doc.metadata.title.toLowerCase().includes(searchLower)
-      ) {
-        // Find snippet around the query
-        const index = contentLower.indexOf(searchLower)
-        const start = Math.max(0, index - 100)
-        const end = Math.min(doc.markdown.length, index + 200)
-        const snippet = doc.markdown.substring(start, end).trim()
+    // Find all occurrences of the search term
+    let searchIndex = 0
+    const maxResults = 10
 
-        results.push({
-          path,
-          title: doc.metadata.title,
-          snippet: `...${snippet}...`,
-        })
-      }
-    } catch (error) {
-      // Skip paths that don't exist
-      continue
+    while (results.length < maxResults) {
+      const index = contentLower.indexOf(searchLower, searchIndex)
+      if (index === -1) break
+
+      // Extract snippet around the match
+      const start = Math.max(0, index - 150)
+      const end = Math.min(llmsTxt.length, index + 250)
+      const snippet = llmsTxt.substring(start, end).trim()
+
+      // Try to extract a title from nearby heading (# Title)
+      const beforeMatch = llmsTxt.substring(Math.max(0, index - 500), index)
+      const headingMatch = beforeMatch.match(/#{1,3}\s+([^\n]+)\n[^#]*$/s)
+      const title = headingMatch ? headingMatch[1].trim() : 'Documentation'
+
+      // Try to find a URL reference nearby
+      const urlMatch = snippet.match(/https:\/\/docs\.humanity\.org([^\s\)]+)/)
+      const path = urlMatch ? urlMatch[1] : '/llms.txt'
+
+      results.push({
+        path,
+        title,
+        snippet: `...${snippet.replace(/\n/g, ' ')}...`,
+      })
+
+      searchIndex = index + searchLower.length
     }
+  } catch (error) {
+    // Fallback: return empty results if llms.txt fetch fails
+    console.error('Failed to search llms.txt:', error)
   }
 
   return results
 }
 
 /**
- * Get a list of all API endpoints from documentation
+ * Get a list of all API endpoints from llms.txt
  */
 async function listApiEndpoints(): Promise<string[]> {
-  const apiPaths = ['/api', '/api/reference', '/reference/api']
   const endpoints = new Set<string>()
 
-  for (const path of apiPaths) {
-    try {
-      const doc = await fetchDocumentation(path)
-      doc.metadata.apiEndpoints?.forEach((ep) => endpoints.add(ep))
-    } catch (error) {
-      continue
+  try {
+    const llmsTxt = await fetchLlmsTxt()
+
+    // Match common API endpoint patterns
+    const patterns = [
+      /(?:GET|POST|PUT|DELETE|PATCH)\s+([\/][a-zA-Z0-9\-\/_{}:]+)/g,
+      /`(\/(?:api|v1|v2)[\/a-zA-Z0-9\-_{}:]+)`/g,
+      /endpoint[:\s]+[`"']?([\/][a-zA-Z0-9\-\/_{}:]+)[`"']?/gi,
+    ]
+
+    for (const pattern of patterns) {
+      let match
+      while ((match = pattern.exec(llmsTxt)) !== null) {
+        const endpoint = match[1]
+        if (endpoint && endpoint.length > 1) {
+          endpoints.add(endpoint)
+        }
+      }
     }
+  } catch (error) {
+    console.error('Failed to extract API endpoints:', error)
   }
 
-  return Array.from(endpoints)
+  return Array.from(endpoints).sort()
 }
 
 /**
@@ -229,14 +320,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'fetch_docs',
         description:
-          'Fetch documentation from docs.humanity.org. Returns formatted markdown with metadata including API endpoints and code examples.',
+          'Fetch documentation from docs.humanity.org. Use "/" or empty path to get comprehensive llms.txt (recommended for general queries). Use specific paths for individual pages.',
         inputSchema: {
           type: 'object',
           properties: {
             path: {
               type: 'string',
               description:
-                "Path to the documentation page (e.g., '/api/authentication', '/getting-started', or full URL)",
+                "Path to fetch. Use '/' for comprehensive llms.txt documentation, or specific paths like '/api/authentication' for individual pages",
             },
             include_metadata: {
               type: 'boolean',
@@ -251,7 +342,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'search_docs',
         description:
-          'Search Humanity Protocol documentation for a specific query. Returns relevant pages with snippets.',
+          'Search Humanity Protocol documentation using llms.txt. Returns relevant snippets with context. Efficient single-fetch search across all documentation.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -267,7 +358,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'list_api_endpoints',
         description:
-          'Get a comprehensive list of all API endpoints documented in docs.humanity.org',
+          'Extract all API endpoints from llms.txt. Returns endpoints in various formats (REST methods, paths, etc.)',
         inputSchema: {
           type: 'object',
           properties: {},
