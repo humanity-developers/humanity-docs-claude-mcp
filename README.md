@@ -1,8 +1,17 @@
 # Humanity Protocol Docs MCP Server
 
-An MCP (Model Context Protocol) server that gives Claude Code live access to [docs.humanity.org](https://docs.humanity.org) while you build. Fetch documentation, search across pages, discover API endpoints, and extract code examples — all directly within your Claude Code session.
+An MCP (Model Context Protocol) server that gives Claude Code live access to [docs.humanity.org](https://docs.humanity.org) while you build. Features intelligent chunk-based search with ranked results, precise content retrieval, section extraction, and automatic curl command generation — all directly within your Claude Code session.
 
 > **How it works:** You do not need to run or manage the server manually. Once configured, Claude Code starts and stops it automatically as needed via stdio.
+
+## ✨ Key Features (v2.0)
+
+- **🔍 Smart Search** - Ranked search over comprehensive llms.txt with chunkIds for precise retrieval
+- **📑 Chunk-Based Architecture** - Break down large docs into manageable, contextual pieces
+- **🎯 Section Extraction** - Pull specific sections by heading without fetching entire pages
+- **📋 Page Outlines** - See document structure before diving deep
+- **⚡ cURL Generator** - Instantly create ready-to-run API commands with proper headers and payloads
+- **🗂️ Smart Caching** - 1-hour TTL with automatic invalidation
 
 ---
 
@@ -52,6 +61,47 @@ humanity-docs · ✓ connected
 ```bash
 claude mcp remove humanity-docs
 ```
+
+---
+
+## What's New in v2.0
+
+### Major Improvements
+
+**🔍 Intelligent Search Architecture**
+- Upgraded from basic path crawling to ranked chunk-based search
+- Search returns `chunkIds` for precise follow-up retrieval
+- Scoring algorithm prioritizes heading matches and exact phrases
+- Single fetch of llms.txt covers entire documentation
+
+**📑 Chunk Management**
+- Automatic document splitting by semantic boundaries (headings)
+- Each chunk tracked with source location (line numbers)
+- ~4000 character chunks optimized for LLM context windows
+- Eliminates truncation issues with large docs
+
+**🎯 Advanced Navigation**
+- `get_section()` - Extract specific sections without loading entire pages
+- `get_page_outline()` - Preview document structure before diving in
+- `get_chunks()` - Explore all chunks for a page
+- `get_chunk()` - Direct retrieval by chunkId
+
+**⚡ Developer Tools**
+- `generate_curl()` - Auto-generate ready-to-run API commands
+- Supports headers, query params, and JSON payloads
+- Proper escaping and formatting
+
+**Performance**
+- Increased cache limits (50K → 120K chars)
+- Smarter caching strategy (separate chunk cache)
+- Reduced redundant fetches with llms.txt-first approach
+
+### Migration from v1.0
+
+If you're upgrading:
+1. Run `./setup.sh` to rebuild with new features
+2. Clear your cache: ask Claude to `"Clear the docs cache"`
+3. Your existing configuration doesn't need changes
 
 ---
 
@@ -122,7 +172,7 @@ cd humanity-docs-mcp
 node dist/index.js
 ```
 
-You should see: `Humanity Protocol Docs MCP Server running on stdio`
+You should see: `Humanity Protocol Docs MCP Server running on stdio (v2.0.0)`
 
 If you see this, the server itself is fine — the issue is with the configuration. Press `Ctrl+C` to stop it. You do **not** need to keep this running; it was just a verification step.
 
@@ -145,19 +195,68 @@ For example, if you say:
 "Build a React app that uses the SDK to authenticate email from a user"
 ```
 
-Claude will internally fetch the relevant SDK and authentication documentation, extract code examples, and use all of that as context while writing your app. You won't see any of that happening — it just works.
+Claude will internally fetch the relevant SDK and authentication documentation, extract code examples, and use all of that as context while building your app. You won't see any of that happening — it just works.
 
-The server has five capabilities it can use behind the scenes: fetching specific pages, searching across the documentation, listing API endpoints, extracting code examples, and clearing its cache when docs have been updated. Claude decides which of these to use based on what you're asking for.
+### Available Tools
 
-The only time you'd explicitly mention the server is if you want to force a cache refresh after a doc update:
+The server provides 11 specialized tools that Claude uses intelligently based on your needs:
 
-```
-"The docs were just updated. Clear the cache and fetch the webhook page again."
-```
+| Tool | Purpose | Example Use Case |
+|------|---------|------------------|
+| `fetch_docs` | Get full documentation pages | "Show me the SDK overview" |
+| `search_docs` | Ranked search with chunkIds | "Find palm verification docs" |
+| `get_chunk` | Fetch precise chunk by ID | Follow-up after search |
+| `get_chunks` | List all chunks for a page | Explore document structure |
+| `get_section` | Extract specific heading section | "Get just the authentication section" |
+| `get_page_outline` | View document headings | Navigate before fetching |
+| `list_pages` | Discover available paths | "What pages exist in docs?" |
+| `list_api_endpoints` | Extract API endpoints | "What endpoints are available?" |
+| `extract_code_examples` | Pull code samples | "Get code examples from SDK page" |
+| `generate_curl` | Create ready-to-run commands | "Make a curl for the verify endpoint" |
+| `clear_cache` | Refresh cached content | "Clear cache and refetch" |
+
+### Workflow Example
+
+**User:** "Search for palm verification"
+
+**Claude internally:**
+1. Uses `search_docs("palm verification")` → gets ranked results with chunkIds
+2. Uses `get_chunk(chunkId)` → retrieves exact context
+3. Presents information to you with source references
+
+**User:** "Now generate a curl command to test the verify endpoint"
+
+**Claude internally:**
+1. Uses `generate_curl({method: "POST", url: "...", json_body: {...}})`
+2. Returns ready-to-run command with proper headers and payload
 
 ---
 
 ## Usage patterns
+
+### Smart search with chunk retrieval
+
+```
+"Search for palm verification and show me the implementation details"
+```
+
+Claude will search across all documentation, rank results by relevance, and fetch the exact chunks containing palm verification information.
+
+### Section-specific extraction
+
+```
+"Get just the authentication section from the SDK docs"
+```
+
+Claude will fetch the page outline, locate the authentication heading, and extract only that section — no need to load the entire page.
+
+### Generate API commands
+
+```
+"Create a curl command to verify a user with their auth token"
+```
+
+Claude will look up the verification endpoint details and generate a properly formatted curl command with headers, auth, and example payload.
 
 ### Building an app
 
@@ -165,7 +264,7 @@ The only time you'd explicitly mention the server is if you want to force a cach
 "Build a React application that uses the SDK to go through PKCE verification"
 ```
 
-Claude will pull the SDK and PKCE verification docs, extract relevant code examples, and use them as context while building the app.
+Claude will search for PKCE docs, extract code examples, and use them as context while building your app.
 
 ### Exploring scopes and presets
 
@@ -173,15 +272,7 @@ Claude will pull the SDK and PKCE verification docs, extract relevant code examp
 "Give me all available scopes and presets my application can request"
 ```
 
-Claude will fetch the authentication and scopes documentation and compile what's available for your application.
-
-### Working with user profiles
-
-```
-"Give me examples on how to use the SDK to fetch a user profile via presets"
-```
-
-Claude will pull the SDK docs and any preset-related examples, then put together working code for you.
+Claude will fetch the authentication documentation, extract scope definitions, and compile what's available for your application.
 
 ### Keeping up with doc changes
 
@@ -193,15 +284,26 @@ Claude will pull the SDK docs and any preset-related examples, then put together
 
 ## Configuration reference
 
-The server caches fetched pages for one hour by default. These values can be adjusted in `src/index.ts`:
+The server caches fetched pages and chunks for one hour by default. These values can be adjusted in `src/index.ts`:
 
 | Constant | Default | Description |
 |---|---|---|
 | `CACHE_TTL` | `3600` (1 hour) | How long fetched pages are cached, in seconds |
-| `MAX_CONTENT_LENGTH` | `50000` | Maximum characters returned per page before truncation |
+| `MAX_CONTENT_LENGTH` | `120000` | Maximum characters returned per response |
+| `MAX_CHUNK_CHARS` | `4000` | Target size for each documentation chunk |
+| `MAX_SEARCH_RESULTS` | `10` | Maximum results returned by search |
 | `DOCS_BASE_URL` | `https://docs.humanity.org` | Base URL for the documentation site |
+| `LLMS_TXT_URL` | `https://docs.humanity.org/llms.txt` | Primary source for comprehensive docs |
 
-The `commonPaths` array in `searchDocumentation` controls which pages are included in search. Add or remove paths there to match your documentation structure.
+### Architecture Notes
+
+**Chunk-based design:** Documents are automatically split by headings into chunks of ~4000 characters. This enables:
+- Precise retrieval via chunkId references
+- Better context management for LLMs
+- Faster searches (no need to scan full pages)
+- Line number tracking for exact source locations
+
+**Search algorithm:** Uses term frequency scoring with heading preference (8x weight for heading matches, 2x for body matches). Exact phrase matches receive bonus points.
 
 ---
 
