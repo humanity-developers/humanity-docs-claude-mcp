@@ -1,6 +1,6 @@
 {
   "name": "@humanity-protocol/docs-mcp-server",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "MCP server for Humanity Protocol documentation with caching, search, and intelligent fetching",
   "type": "module",
   "main": "dist/index.js",
