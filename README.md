@@ -1,6 +1,20 @@
-# Humanity Protocol Docs MCP Server
+<p align="center">
+  <img src="https://cdn.humanity.org/humanity-protocol-logo-devs.png" width="576" alt="Humanity Protocol">
+</p>
 
-An MCP (Model Context Protocol) server that gives Claude Code live access to [docs.humanity.org](https://docs.humanity.org) while you build. Features intelligent chunk-based search with ranked results, precise content retrieval, section extraction, and automatic curl command generation — all directly within your Claude Code session.
+<h1 align="center">Humanity Protocol Docs MCP Server</h1>
+
+<p align="center">
+  <strong>An MCP (Model Context Protocol) server that gives Claude Code live access to <a href="https://docs.humanity.org" target="_blanck"  rel="noreferrer noopener">Humanity documentation</a> while you build.</strong>
+</p>
+
+<p align="center">
+  <a href="https://docs.humanity.org"><img src="https://img.shields.io/badge/docs-humanity.org-blue.svg" alt="Documentation"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
+  <a href="https://discord.gg/humanity"><img src="https://img.shields.io/badge/discord-join-7289da.svg" alt="Discord"></a>
+</p>
+
+---
 
 > **How it works:** You do not need to run or manage the server manually. Once configured, Claude Code starts and stops it automatically as needed via stdio.
 
@@ -69,29 +83,34 @@ claude mcp remove humanity-docs
 ### Major Improvements
 
 **🔍 Intelligent Search Architecture**
+
 - Upgraded from basic path crawling to ranked chunk-based search
 - Search returns `chunkIds` for precise follow-up retrieval
 - Scoring algorithm prioritizes heading matches and exact phrases
 - Single fetch of llms.txt covers entire documentation
 
 **📑 Chunk Management**
+
 - Automatic document splitting by semantic boundaries (headings)
 - Each chunk tracked with source location (line numbers)
 - ~4000 character chunks optimized for LLM context windows
 - Eliminates truncation issues with large docs
 
 **🎯 Advanced Navigation**
+
 - `get_section()` - Extract specific sections without loading entire pages
 - `get_page_outline()` - Preview document structure before diving in
 - `get_chunks()` - Explore all chunks for a page
 - `get_chunk()` - Direct retrieval by chunkId
 
 **⚡ Developer Tools**
+
 - `generate_curl()` - Auto-generate ready-to-run API commands
 - Supports headers, query params, and JSON payloads
 - Proper escaping and formatting
 
 **Performance**
+
 - Increased cache limits (50K → 120K chars)
 - Smarter caching strategy (separate chunk cache)
 - Reduced redundant fetches with llms.txt-first approach
@@ -99,6 +118,7 @@ claude mcp remove humanity-docs
 ### Migration from v1.0
 
 If you're upgrading:
+
 1. Run `./setup.sh` to rebuild with new features
 2. Clear your cache: ask Claude to `"Clear the docs cache"`
 3. Your existing configuration doesn't need changes
@@ -128,11 +148,11 @@ Where to add it depends on your setup:
 
 **VS Code / VS Code OSS / VSCodium** — the configuration file location varies depending on your OS and which variant you're using:
 
-| Variant | Linux | macOS |
-|---|---|---|
-| VS Code | `~/.config/Code/User/settings.json` | `~/Library/Application Support/Code/User/settings.json` |
-| VS Code OSS | `~/.config/Code - OSS/User/settings.json` | — |
-| VSCodium | `~/.config/VSCodium/User/settings.json` | `~/Library/Application Support/VSCodium/User/settings.json` |
+| Variant     | Linux                                     | macOS                                                       |
+| ----------- | ----------------------------------------- | ----------------------------------------------------------- |
+| VS Code     | `~/.config/Code/User/settings.json`       | `~/Library/Application Support/Code/User/settings.json`     |
+| VS Code OSS | `~/.config/Code - OSS/User/settings.json` | —                                                           |
+| VSCodium    | `~/.config/VSCodium/User/settings.json`   | `~/Library/Application Support/VSCodium/User/settings.json` |
 
 If you're not sure which one applies, run this to find it:
 
@@ -201,25 +221,26 @@ Claude will internally fetch the relevant SDK and authentication documentation, 
 
 The server provides 11 specialized tools that Claude uses intelligently based on your needs:
 
-| Tool | Purpose | Example Use Case |
-|------|---------|------------------|
-| `fetch_docs` | Get full documentation pages | "Show me the SDK overview" |
-| `search_docs` | Ranked search with chunkIds | "Find palm verification docs" |
-| `get_chunk` | Fetch precise chunk by ID | Follow-up after search |
-| `get_chunks` | List all chunks for a page | Explore document structure |
-| `get_section` | Extract specific heading section | "Get just the authentication section" |
-| `get_page_outline` | View document headings | Navigate before fetching |
-| `list_pages` | Discover available paths | "What pages exist in docs?" |
-| `list_api_endpoints` | Extract API endpoints | "What endpoints are available?" |
-| `extract_code_examples` | Pull code samples | "Get code examples from SDK page" |
-| `generate_curl` | Create ready-to-run commands | "Make a curl for the verify endpoint" |
-| `clear_cache` | Refresh cached content | "Clear cache and refetch" |
+| Tool                    | Purpose                          | Example Use Case                      |
+| ----------------------- | -------------------------------- | ------------------------------------- |
+| `fetch_docs`            | Get full documentation pages     | "Show me the SDK overview"            |
+| `search_docs`           | Ranked search with chunkIds      | "Find palm verification docs"         |
+| `get_chunk`             | Fetch precise chunk by ID        | Follow-up after search                |
+| `get_chunks`            | List all chunks for a page       | Explore document structure            |
+| `get_section`           | Extract specific heading section | "Get just the authentication section" |
+| `get_page_outline`      | View document headings           | Navigate before fetching              |
+| `list_pages`            | Discover available paths         | "What pages exist in docs?"           |
+| `list_api_endpoints`    | Extract API endpoints            | "What endpoints are available?"       |
+| `extract_code_examples` | Pull code samples                | "Get code examples from SDK page"     |
+| `generate_curl`         | Create ready-to-run commands     | "Make a curl for the verify endpoint" |
+| `clear_cache`           | Refresh cached content           | "Clear cache and refetch"             |
 
 ### Workflow Example
 
 **User:** "Search for palm verification"
 
 **Claude internally:**
+
 1. Uses `search_docs("palm verification")` → gets ranked results with chunkIds
 2. Uses `get_chunk(chunkId)` → retrieves exact context
 3. Presents information to you with source references
@@ -227,6 +248,7 @@ The server provides 11 specialized tools that Claude uses intelligently based on
 **User:** "Now generate a curl command to test the verify endpoint"
 
 **Claude internally:**
+
 1. Uses `generate_curl({method: "POST", url: "...", json_body: {...}})`
 2. Returns ready-to-run command with proper headers and payload
 
@@ -286,18 +308,19 @@ Claude will fetch the authentication documentation, extract scope definitions, a
 
 The server caches fetched pages and chunks for one hour by default. These values can be adjusted in `src/index.ts`:
 
-| Constant | Default | Description |
-|---|---|---|
-| `CACHE_TTL` | `3600` (1 hour) | How long fetched pages are cached, in seconds |
-| `MAX_CONTENT_LENGTH` | `120000` | Maximum characters returned per response |
-| `MAX_CHUNK_CHARS` | `4000` | Target size for each documentation chunk |
-| `MAX_SEARCH_RESULTS` | `10` | Maximum results returned by search |
-| `DOCS_BASE_URL` | `https://docs.humanity.org` | Base URL for the documentation site |
-| `LLMS_TXT_URL` | `https://docs.humanity.org/llms.txt` | Primary source for comprehensive docs |
+| Constant             | Default                              | Description                                   |
+| -------------------- | ------------------------------------ | --------------------------------------------- |
+| `CACHE_TTL`          | `3600` (1 hour)                      | How long fetched pages are cached, in seconds |
+| `MAX_CONTENT_LENGTH` | `120000`                             | Maximum characters returned per response      |
+| `MAX_CHUNK_CHARS`    | `4000`                               | Target size for each documentation chunk      |
+| `MAX_SEARCH_RESULTS` | `10`                                 | Maximum results returned by search            |
+| `DOCS_BASE_URL`      | `https://docs.humanity.org`          | Base URL for the documentation site           |
+| `LLMS_TXT_URL`       | `https://docs.humanity.org/llms.txt` | Primary source for comprehensive docs         |
 
 ### Architecture Notes
 
 **Chunk-based design:** Documents are automatically split by headings into chunks of ~4000 characters. This enables:
+
 - Precise retrieval via chunkId references
 - Better context management for LLMs
 - Faster searches (no need to scan full pages)
