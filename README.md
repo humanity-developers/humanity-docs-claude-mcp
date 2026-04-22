@@ -18,14 +18,15 @@
 
 > **How it works:** You do not need to run or manage the server manually. Once configured, Claude Code starts and stops it automatically as needed via stdio.
 
-## ✨ Key Features (v2.0)
+## ✨ Key Features (v3.0)
 
-- **🔍 Smart Search** - Ranked search over comprehensive llms.txt with chunkIds for precise retrieval
+- **🔍 Smart Search** - Ranked search over comprehensive llms.txt with chunkIds for precise retrieval. Scope search to a single page with an optional `path` parameter.
 - **📑 Chunk-Based Architecture** - Break down large docs into manageable, contextual pieces
 - **🎯 Section Extraction** - Pull specific sections by heading without fetching entire pages
 - **📋 Page Outlines** - See document structure before diving deep
-- **⚡ cURL Generator** - Instantly create ready-to-run API commands with proper headers and payloads
-- **🗂️ Smart Caching** - 1-hour TTL with automatic invalidation
+- **⚡ Multi-Language Snippet Generator** - Generate ready-to-run API commands in curl, HTTP, JavaScript, or Python
+- **🗂️ Smart Caching** - 15-minute TTL with staleness timestamps on every response
+- **🛡️ Reliable Fetching** - 10-second timeout on all outbound requests with clear error messages
 
 ---
 
@@ -78,50 +79,75 @@ claude mcp remove humanity-docs
 
 ---
 
-## What's New in v2.0
+## What's New in v3.0
 
-### Major Improvements
+### Modular Architecture
 
-**🔍 Intelligent Search Architecture**
+The entire server has been refactored from a single 1073-line file into focused modules, each independently navigable and editable:
 
-- Upgraded from basic path crawling to ranked chunk-based search
-- Search returns `chunkIds` for precise follow-up retrieval
-- Scoring algorithm prioritizes heading matches and exact phrases
-- Single fetch of llms.txt covers entire documentation
+```
+src/
+├── config.ts     # Constants, cache instance, Turndown init
+├── types.ts      # DocMetadata, CachedDoc, Chunk, SearchResult
+├── utils.ts      # Text helpers, chunking, scoring, cache footer
+├── fetcher.ts    # All outbound HTTP and caching logic
+├── search.ts     # Search, chunk lookup, section extraction
+├── curl.ts       # Multi-language snippet generator
+├── tools.ts      # MCP tool definitions and descriptions
+└── index.ts      # Server init and request dispatch
+```
 
-**📑 Chunk Management**
+### Reliability Improvements
 
-- Automatic document splitting by semantic boundaries (headings)
-- Each chunk tracked with source location (line numbers)
-- ~4000 character chunks optimized for LLM context windows
-- Eliminates truncation issues with large docs
+**Fetch timeouts** — All outbound requests to docs.humanity.org now have a 10-second `AbortController` timeout. Previously a slow or unreachable server would hang indefinitely with no feedback. Failed requests now return a clear error: `"Request timed out after 10s — docs.humanity.org may be unavailable."`
 
-**🎯 Advanced Navigation**
+**Search scoring fix** — The exact-phrase bonus in the ranking algorithm was firing once per search term instead of once per query, inflating scores for multi-word queries. Fixed: phrase bonus now runs exactly once after the per-term scoring loop.
 
-- `get_section()` - Extract specific sections without loading entire pages
-- `get_page_outline()` - Preview document structure before diving in
-- `get_chunks()` - Explore all chunks for a page
-- `get_chunk()` - Direct retrieval by chunkId
+### Cache & Freshness
 
-**⚡ Developer Tools**
+**15-minute TTL** — Reduced from 1 hour to 15 minutes so doc updates surface faster within a session.
 
-- `generate_curl()` - Auto-generate ready-to-run API commands
-- Supports headers, query params, and JSON payloads
-- Proper escaping and formatting
+**Staleness footer** — Every tool response that draws from the cache now appends a footer showing when the content was fetched and how old it is:
 
-**Performance**
+```
+---
+_Content cached at 2026-04-22T10:15:00Z (4 min ago) · Call clear_cache to refresh_
+```
 
-- Increased cache limits (50K → 120K chars)
-- Smarter caching strategy (separate chunk cache)
-- Reduced redundant fetches with llms.txt-first approach
+**Improved `clear_cache` description** — Claude now knows to call `clear_cache` proactively when the user mentions stale content or recent doc updates.
 
-### Migration from v1.0
+### Multi-Language Snippet Generator
 
-If you're upgrading:
+`generate_curl` has been replaced by `generate_code_snippet`, which supports four output formats via a `language` parameter:
 
-1. Run `./setup.sh` to rebuild with new features
-2. Clear your cache: ask Claude to `"Clear the docs cache"`
-3. Your existing configuration doesn't need changes
+| Language       | Output style              |
+| -------------- | ------------------------- |
+| `curl`         | `curl -sS -X ...` (default) |
+| `http`         | Raw HTTP/1.1 request      |
+| `javascript`   | `fetch()` with async/await |
+| `python`       | `requests` library        |
+
+`Content-Type: application/json` is injected automatically when `json_body` is provided. The previous double-stringify bug on the curl body has also been fixed.
+
+### Scoped Page Search
+
+`search_docs` now accepts an optional `path` parameter. Without it, search runs over the full llms.txt corpus as before. With it, search is scoped to the chunks of a single page — useful when working within one integration path.
+
+### Improved Tool Descriptions
+
+All tool and parameter descriptions have been rewritten to reduce silent failures:
+
+- `get_section` now notes that heading must be an exact (case-insensitive) match and suggests `get_page_outline` first
+- `get_chunks` clarifies how to use returned chunkIds and how to access the full corpus
+- `fetch_docs` mentions it is scoped to docs.humanity.org and to use `list_pages` first
+- `extract_code_examples` notes that `fetch_docs` already includes code examples
+- `search_docs` explains that the score field is a relative ranking
+
+### Migration from v2.0
+
+1. Run `./setup.sh` to rebuild
+2. No configuration changes needed
+3. Note that `generate_curl` has been renamed to `generate_code_snippet` — update any saved prompts that reference it by name
 
 ---
 
@@ -192,7 +218,7 @@ cd humanity-docs-mcp
 node dist/index.js
 ```
 
-You should see: `Humanity Protocol Docs MCP Server running on stdio (v2.0.0)`
+You should see: `Humanity Protocol Docs MCP Server running on stdio (v3.0.0)`
 
 If you see this, the server itself is fine — the issue is with the configuration. Press `Ctrl+C` to stop it. You do **not** need to keep this running; it was just a verification step.
 
@@ -221,19 +247,19 @@ Claude will internally fetch the relevant SDK and authentication documentation, 
 
 The server provides 11 specialized tools that Claude uses intelligently based on your needs:
 
-| Tool                    | Purpose                          | Example Use Case                      |
-| ----------------------- | -------------------------------- | ------------------------------------- |
-| `fetch_docs`            | Get full documentation pages     | "Show me the SDK overview"            |
-| `search_docs`           | Ranked search with chunkIds      | "Find palm verification docs"         |
-| `get_chunk`             | Fetch precise chunk by ID        | Follow-up after search                |
-| `get_chunks`            | List all chunks for a page       | Explore document structure            |
-| `get_section`           | Extract specific heading section | "Get just the authentication section" |
-| `get_page_outline`      | View document headings           | Navigate before fetching              |
-| `list_pages`            | Discover available paths         | "What pages exist in docs?"           |
-| `list_api_endpoints`    | Extract API endpoints            | "What endpoints are available?"       |
-| `extract_code_examples` | Pull code samples                | "Get code examples from SDK page"     |
-| `generate_curl`         | Create ready-to-run commands     | "Make a curl for the verify endpoint" |
-| `clear_cache`           | Refresh cached content           | "Clear cache and refetch"             |
+| Tool                     | Purpose                                    | Example Use Case                           |
+| ------------------------ | ------------------------------------------ | ------------------------------------------ |
+| `fetch_docs`             | Get full documentation pages               | "Show me the SDK overview"                 |
+| `search_docs`            | Ranked search, optionally scoped to a page | "Find palm verification docs"              |
+| `get_chunk`              | Fetch precise chunk by ID                  | Follow-up after search                     |
+| `get_chunks`             | List all chunks for a page or corpus       | Explore document structure                 |
+| `get_section`            | Extract specific heading section           | "Get just the authentication section"      |
+| `get_page_outline`       | View document headings                     | Navigate before fetching                   |
+| `list_pages`             | Discover available paths                   | "What pages exist in docs?"                |
+| `list_api_endpoints`     | Extract API endpoints                      | "What endpoints are available?"            |
+| `extract_code_examples`  | Pull code samples only                     | "Get code examples from SDK page"          |
+| `generate_code_snippet`  | Create API commands in 4 languages         | "Make a curl for the verify endpoint"      |
+| `clear_cache`            | Refresh cached content                     | "Clear cache and refetch"                  |
 
 ### Workflow Example
 
@@ -245,12 +271,12 @@ The server provides 11 specialized tools that Claude uses intelligently based on
 2. Uses `get_chunk(chunkId)` → retrieves exact context
 3. Presents information to you with source references
 
-**User:** "Now generate a curl command to test the verify endpoint"
+**User:** "Now generate a Python snippet to test the verify endpoint"
 
 **Claude internally:**
 
-1. Uses `generate_curl({method: "POST", url: "...", json_body: {...}})`
-2. Returns ready-to-run command with proper headers and payload
+1. Uses `generate_code_snippet({method: "POST", url: "...", language: "python", json_body: {...}})`
+2. Returns ready-to-run Python code with proper headers and payload
 
 ---
 
@@ -264,6 +290,14 @@ The server provides 11 specialized tools that Claude uses intelligently based on
 
 Claude will search across all documentation, rank results by relevance, and fetch the exact chunks containing palm verification information.
 
+### Scoped search within a page
+
+```
+"Search for 'token expiry' only within the authentication page"
+```
+
+Claude will scope the search to that page's chunks, returning results without noise from unrelated sections.
+
 ### Section-specific extraction
 
 ```
@@ -272,13 +306,15 @@ Claude will search across all documentation, rank results by relevance, and fetc
 
 Claude will fetch the page outline, locate the authentication heading, and extract only that section — no need to load the entire page.
 
-### Generate API commands
+### Generate API commands in any language
 
 ```
 "Create a curl command to verify a user with their auth token"
+"Give me the same as a Python snippet"
+"Show me the JavaScript fetch version"
 ```
 
-Claude will look up the verification endpoint details and generate a properly formatted curl command with headers, auth, and example payload.
+Claude will look up the endpoint details and generate a properly formatted snippet in your preferred language.
 
 ### Building an app
 
@@ -288,29 +324,23 @@ Claude will look up the verification endpoint details and generate a properly fo
 
 Claude will search for PKCE docs, extract code examples, and use them as context while building your app.
 
-### Exploring scopes and presets
-
-```
-"Give me all available scopes and presets my application can request"
-```
-
-Claude will fetch the authentication documentation, extract scope definitions, and compile what's available for your application.
-
 ### Keeping up with doc changes
 
 ```
 "The docs were just updated. Clear the cache and fetch the webhook page again."
 ```
 
+Or simply wait — the cache expires automatically every 15 minutes.
+
 ---
 
 ## Configuration reference
 
-The server caches fetched pages and chunks for one hour by default. These values can be adjusted in `src/index.ts`:
+Constants are defined in `src/config.ts`. Edit them and rebuild with `npm run build` to apply changes.
 
 | Constant             | Default                              | Description                                   |
 | -------------------- | ------------------------------------ | --------------------------------------------- |
-| `CACHE_TTL`          | `3600` (1 hour)                      | How long fetched pages are cached, in seconds |
+| `CACHE_TTL`          | `900` (15 minutes)                   | How long fetched pages are cached, in seconds |
 | `MAX_CONTENT_LENGTH` | `120000`                             | Maximum characters returned per response      |
 | `MAX_CHUNK_CHARS`    | `4000`                               | Target size for each documentation chunk      |
 | `MAX_SEARCH_RESULTS` | `10`                                 | Maximum results returned by search            |
@@ -326,7 +356,9 @@ The server caches fetched pages and chunks for one hour by default. These values
 - Faster searches (no need to scan full pages)
 - Line number tracking for exact source locations
 
-**Search algorithm:** Uses term frequency scoring with heading preference (8x weight for heading matches, 2x for body matches). Exact phrase matches receive bonus points.
+**Search algorithm:** Uses term frequency scoring with heading preference (8x weight for heading matches, 2x for body matches). Exact phrase matches receive a one-time bonus after the per-term scoring pass.
+
+**Fetch reliability:** All HTTP requests use a 10-second `AbortController` timeout. If docs.humanity.org is unreachable, tools fail fast with a clear message rather than hanging.
 
 ---
 
@@ -338,11 +370,14 @@ Verify the path in your configuration is absolute. Run `pwd` inside `humanity-do
 **"Request failed with status code 404"**
 The path you're requesting doesn't exist on docs.humanity.org. Try searching first to find valid paths, or fetch the root page (`/`) to see what's available.
 
+**"Request timed out after 10s"**
+docs.humanity.org is unreachable or slow. Check your network connection and try again. If it persists, the site may be temporarily unavailable.
+
 **Stale content after a doc update**
-Ask Claude to clear the cache: `"Clear the docs cache"`. The next fetch will pull fresh content.
+Ask Claude to clear the cache: `"Clear the docs cache"`. The cache also expires automatically every 15 minutes. Every response includes a footer showing the cached timestamp so you can judge freshness at a glance.
 
 **Content appears truncated**
-Increase `MAX_CONTENT_LENGTH` in `src/index.ts` and rebuild with `npm run build`.
+Increase `MAX_CONTENT_LENGTH` in `src/config.ts` and rebuild with `npm run build`.
 
 ---
 
@@ -351,7 +386,14 @@ Increase `MAX_CONTENT_LENGTH` in `src/index.ts` and rebuild with `npm run build`
 ```
 humanity-docs-mcp/
 ├── src/
-│   └── index.ts          # MCP server implementation
+│   ├── config.ts          # Constants, cache, Turndown
+│   ├── types.ts           # Shared TypeScript types
+│   ├── utils.ts           # Text helpers, chunking, scoring
+│   ├── fetcher.ts         # HTTP fetching and caching
+│   ├── search.ts          # Search and retrieval logic
+│   ├── curl.ts            # Multi-language snippet generator
+│   ├── tools.ts           # MCP tool definitions
+│   └── index.ts           # Server init and dispatch
 ├── dist/                  # Compiled output (generated by npm run build)
 │   └── index.js
 ├── package.json
