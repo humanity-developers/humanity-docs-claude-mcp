@@ -173,23 +173,32 @@ export async function getPageChunks(pathOrUrl: string): Promise<Chunk[]> {
 export async function listPagesFromLlms(): Promise<string[]> {
   const cacheKey = 'llms-txt:pages'
   const cached = cache.get<string[]>(cacheKey)
-  if (cached) return cached
+  // [] is truthy, so guard with length to avoid returning a stale empty result
+  if (cached && cached.length > 0) return cached
 
   const raw = await fetchLlmsTxtRaw()
   const urls = new Set<string>()
 
-  const re = /https:\/\/docs\.humanity\.org[^\s\)\]]+/g
-  const matches = raw.match(re) || []
-  for (const u of matches) {
+  // Pattern A: absolute docs.humanity.org URLs — e.g. https://docs.humanity.org/path
+  const absRe = /https:\/\/docs\.humanity\.org[^\s\)\]"<>]+/g
+  for (const u of raw.match(absRe) || []) {
     try {
       const url = new URL(u)
-      urls.add(url.pathname)
-    } catch {
-      // ignore malformed URLs
-    }
+      if (url.pathname && url.pathname !== '/') urls.add(url.pathname)
+    } catch { /* ignore malformed */ }
+  }
+
+  // Pattern B: relative markdown link paths — e.g. [Title](/path/page.md)
+  // docs.humanity.org/llms.txt uses this format exclusively
+  const relRe = /\[[^\]]*\]\((\/[^)#\s]+)\)/g
+  let m: RegExpExecArray | null
+  while ((m = relRe.exec(raw)) !== null) {
+    const p = m[1].replace(/\.md$/, '') // strip .md extension → web path
+    if (p && p !== '/') urls.add(p)
   }
 
   const pages = Array.from(urls).sort()
-  cache.set(cacheKey, pages)
+  // Only cache non-empty results so a failed parse doesn't stick for 15 minutes
+  if (pages.length > 0) cache.set(cacheKey, pages)
   return pages
 }

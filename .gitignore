@@ -10,8 +10,10 @@ dist/
 *.d.ts
 *.d.ts.map
 
-# Keep the dist in source control if you want
+# Keep the dist and test in source control if you want
 # !dist/
+test-mcp.mjs
+test.mjs
 
 # Environment variables
 .env
