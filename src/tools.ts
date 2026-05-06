@@ -1,4 +1,3 @@
-// Static tool definitions — no imports from other project modules
 export const toolDefinitions = [
   {
     name: 'fetch_docs',

@@ -16,7 +16,6 @@ import {
   extractCodeBlocks,
 } from './utils.js'
 
-// P2: 10s timeout on all outbound fetches
 async function fetchWithTimeout(url: string): Promise<import('node-fetch').Response> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 10_000)
@@ -44,7 +43,7 @@ export async function fetchLlmsTxtRaw(): Promise<string> {
   }
   const raw = await response.text()
   cache.set(cacheKey, { raw })
-  cache.set('llms-txt:fetchedAt', new Date()) // P1b: track fetch time for cache footer
+  cache.set('llms-txt:fetchedAt', new Date())
   return raw
 }
 
@@ -173,32 +172,27 @@ export async function getPageChunks(pathOrUrl: string): Promise<Chunk[]> {
 export async function listPagesFromLlms(): Promise<string[]> {
   const cacheKey = 'llms-txt:pages'
   const cached = cache.get<string[]>(cacheKey)
-  // [] is truthy, so guard with length to avoid returning a stale empty result
   if (cached && cached.length > 0) return cached
 
   const raw = await fetchLlmsTxtRaw()
   const urls = new Set<string>()
 
-  // Pattern A: absolute docs.humanity.org URLs — e.g. https://docs.humanity.org/path
   const absRe = /https:\/\/docs\.humanity\.org[^\s\)\]"<>]+/g
   for (const u of raw.match(absRe) || []) {
     try {
       const url = new URL(u)
       if (url.pathname && url.pathname !== '/') urls.add(url.pathname)
-    } catch { /* ignore malformed */ }
+    } catch { }
   }
 
-  // Pattern B: relative markdown link paths — e.g. [Title](/path/page.md)
-  // docs.humanity.org/llms.txt uses this format exclusively
   const relRe = /\[[^\]]*\]\((\/[^)#\s]+)\)/g
   let m: RegExpExecArray | null
   while ((m = relRe.exec(raw)) !== null) {
-    const p = m[1].replace(/\.md$/, '') // strip .md extension → web path
+    const p = m[1].replace(/\.md$/, '')
     if (p && p !== '/') urls.add(p)
   }
 
   const pages = Array.from(urls).sort()
-  // Only cache non-empty results so a failed parse doesn't stick for 15 minutes
   if (pages.length > 0) cache.set(cacheKey, pages)
   return pages
 }

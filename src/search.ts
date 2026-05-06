@@ -3,7 +3,6 @@ import type { Chunk, SearchResult } from './types.js'
 import { scoreChunk, makeSnippet, clampText } from './utils.js'
 import { getLlmsChunks, getPageChunks, fetchDocumentation } from './fetcher.js'
 
-// P6: optional path scopes search to a single page instead of the full llms.txt corpus
 export async function searchDocumentation(
   query: string,
   maxResults = MAX_SEARCH_RESULTS,
