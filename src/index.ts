@@ -69,7 +69,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        // P1b / P7: cache staleness footer
         response += cacheFooter(doc.metadata.lastFetched)
 
         return { content: [{ type: 'text', text: response }] }
@@ -154,7 +153,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             )
             .join('\n')
 
-        // P1b: cache footer
         const lastFetched =
           normalized === '/llms.txt' || normalized === '/'
             ? cache.get<Date>('llms-txt:fetchedAt')
@@ -189,7 +187,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           `**Lines:** ${chunk.startLine}-${chunk.endLine}\n\n` +
           `---\n\n${clampText(chunk.content, MAX_CONTENT_LENGTH)}\n`
 
-        // P1b: cache footer
         const lastFetched =
           chunk.source === 'llms'
             ? cache.get<Date>('llms-txt:fetchedAt')
@@ -231,7 +228,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             `**Snippet:** ${r.snippet}\n\n`
         }
 
-        // P1b: cache footer
         const lastFetched = path
           ? cache.get<CachedDoc>(`doc:${normalizePath(path)}`)?.metadata.lastFetched
           : cache.get<Date>('llms-txt:fetchedAt')
@@ -292,7 +288,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
-      // P9: generate_code_snippet replaces generate_curl
       case 'generate_code_snippet': {
         const method = String(args?.method || 'GET')
         const url = String(args?.url || '')

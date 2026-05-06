@@ -1,5 +1,3 @@
-// P9: generateCodeSnippet replaces generateCurl — supports curl, http, javascript, python
-
 type SnippetArgs = {
   method: string
   url: string
@@ -15,7 +13,6 @@ function buildQueryString(query: Record<string, string | number | boolean>): str
     .join('&')
 }
 
-// P4b: auto-inject Content-Type when jsonBody is present and header not already set
 function withContentType(headers: Record<string, string>, jsonBody: unknown): Record<string, string> {
   if (jsonBody === undefined) return headers
   const hasContentType = Object.keys(headers).some((k) => k.toLowerCase() === 'content-type')
@@ -23,7 +20,6 @@ function withContentType(headers: Record<string, string>, jsonBody: unknown): Re
   return { ...headers, 'Content-Type': 'application/json' }
 }
 
-// Converts a JS value to a valid Python literal
 function toPythonLiteral(val: unknown): string {
   if (val === null) return 'None'
   if (val === true) return 'True'
@@ -47,7 +43,6 @@ function generateCurlSnippet(
   jsonBody: unknown,
 ): string {
   const headerFlags = Object.entries(headers).map(([k, v]) => `-H ${JSON.stringify(`${k}: ${v}`)}`)
-  // P4a: single-quoted JSON body (not double JSON.stringify)
   const bodyFlag = jsonBody !== undefined ? `-d '${JSON.stringify(jsonBody)}'` : ''
 
   const lines = [
@@ -122,7 +117,6 @@ function generatePythonSnippet(
 ): string {
   const methodLower = method.toLowerCase()
 
-  // requests sets Content-Type automatically when json= is used
   const headers =
     jsonBody !== undefined
       ? Object.fromEntries(
@@ -175,8 +169,7 @@ export function generateCodeSnippet(lang: string, args: SnippetArgs): string {
     case 'javascript':
       return generateJsSnippet(method, urlWithQuery, headers, args.jsonBody)
     case 'python':
-      // Python uses params= kwarg so we pass baseUrl without query string
-      return generatePythonSnippet(method, args.url, headers, args.jsonBody, query)
+        return generatePythonSnippet(method, args.url, headers, args.jsonBody, query)
     default:
       return generateCurlSnippet(method, urlWithQuery, headers, args.jsonBody)
   }

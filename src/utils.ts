@@ -180,7 +180,6 @@ export function makeSnippet(text: string, q: string, max = 260): string {
   return (start > 0 ? '…' : '') + snip + (end < t.length ? '…' : '')
 }
 
-// P3 fix: phrase bonus is outside the per-term loop so it fires exactly once
 export function scoreChunk(chunk: Chunk, query: string): number {
   const q = query.toLowerCase().trim()
   if (!q) return 0
@@ -208,7 +207,6 @@ export function scoreChunk(chunk: Chunk, query: string): number {
   return score
 }
 
-// P1b / P7: human-readable cache staleness footer appended to tool responses
 export function cacheFooter(lastFetched: Date): string {
   const diffMs = Date.now() - lastFetched.getTime()
   const diffMin = Math.floor(diffMs / 60_000)
